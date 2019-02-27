@@ -1,32 +1,24 @@
-# Prerequisites
-*.d
+#CMake
+build
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+#Visual Studio
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/*
+x86/*
+bld/
+[Oo]bj/
+.vs
+desktop.ini
 
-# Precompiled Headers
-*.gch
-*.pch
+*.opensdf
+*.sdf
+*.suo
+*.user
 
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
+!x64/glut32.dll
+!x86/glut32.dll
 
-# Fortran module files
-*.mod
-*.smod
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
