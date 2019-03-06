@@ -15,7 +15,6 @@
     <ClInclude Include="Utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="temp.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Assignment.cpp">

@@ -1,4 +1,8 @@
 ﻿  Assignment.cpp
+e:\parallel computing\assignment\parallelcomputing\tutorial 1\assignment.cpp(101): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.10240.0\ucrt\string.h(119): note: see declaration of 'strcpy'
+e:\parallel computing\assignment\parallelcomputing\tutorial 1\assignment.cpp(102): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.10240.0\ucrt\string.h(119): note: see declaration of 'strcpy'
   Tutorial 1.vcxproj -> E:\Parallel Computing\Assignment\ParallelComputing\x64\Debug\Assignment.exe
   kernels.cl
           1 file(s) copied.

@@ -178,7 +178,6 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="temp.h" />
     <ClInclude Include="Utils.h" />
   </ItemGroup>
   <ItemGroup>
