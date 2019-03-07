@@ -4,8 +4,9 @@ kernel void identity(global const int* input, global int* output) {
 	output[gID] = input[gID];
 }
 
-kernel void sum(global const int* input, global int* output, local int* localSums) {
+kernel void sum(global const float* input, global float* output, local float* localSums) {
 	int gID = get_global_id(0);
+	int groupID = get_group_id(0);
 	int lID = get_local_id(0);
 	int size = get_local_size(0);
 
@@ -21,7 +22,5 @@ kernel void sum(global const int* input, global int* output, local int* localSum
 		barrier(CLK_LOCAL_MEM_FENCE);
 	}
 
-	if (!lID) {
-		atomic_add(&output[0], localSums[lID]);
-	}
+	output[groupID] = localSums[0];
 }
