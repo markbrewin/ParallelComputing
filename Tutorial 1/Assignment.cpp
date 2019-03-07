@@ -14,12 +14,6 @@
 
 #include "Utils.h"
 
-typedef struct temp {
-	char location[14];
-	char date[12];
-	float value;
-} temp_t;
-
 void print_help() {
 	std::cerr << "Application usage:" << std::endl;
 
@@ -81,11 +75,14 @@ int main(int argc, char **argv) {
 		}
 
 		//Part 3 - Read Data
-		std::vector<temp> input;
-		std::ifstream dataFile("temp_lincolnshire_short.txt");
+		std::vector<int> input;
+		std::ifstream dataFile;
 		
 		if (sourceID == 1) {
-			std::ifstream dataFile("temp_lincolnshire.txt");
+			dataFile.open("temp_lincolnshire.txt");
+		}
+		else {
+			dataFile.open("temp_lincolnshire_short.txt");
 		}
 
 		if (dataFile.good()) {
@@ -97,12 +94,7 @@ int main(int argc, char **argv) {
 				std::vector<std::string> split((std::istream_iterator<std::string>{iss}),
 												std::istream_iterator<std::string>());
 
-				temp temp;
-				strcpy(temp.location, split[0].c_str());
-				strcpy(temp.date, (split[1] + split[2] + split[3] + split[4]).c_str());
-				temp.value = std::stof(split[5]);
-
-				input.push_back(temp);
+				input.push_back(std::stol(split[5]));
 			}
 
 			dataFile.close();
@@ -113,45 +105,54 @@ int main(int argc, char **argv) {
 		}
 
 		//Part 4 - Memory Allocation
+		cl::Device device = context.getInfo<CL_CONTEXT_DEVICES>()[deviceID];
+		cl::Kernel kernelMean = cl::Kernel(program, "sum");
+
+		int localSize = 32;
+		int paddingSize = input.size() % localSize;
+
+		if (paddingSize) {
+			std::vector<int> inputExtra(localSize - paddingSize, 0);
+
+			input.insert(input.end(), inputExtra.begin(), inputExtra.end());
+		}
+
 		size_t inputElems = input.size();
-		size_t inputSize = input.size() * sizeof(temp);
+		size_t inputSize = input.size() * sizeof(int);
+		size_t numGroups = inputElems / localSize;
 
-		std::vector<temp> output(inputElems);
-		size_t outputSize = output.size() * sizeof(temp);
+		std::vector<int> output(1);
+		size_t outputSize = output.size() * sizeof(int);
 
-		cl::Buffer inputBuffer(context, CL_MEM_READ_WRITE, inputSize);
+		cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY, inputSize);
 		cl::Buffer outputBuffer(context, CL_MEM_READ_WRITE, outputSize);
 
 		//Part 5 - Device Operations
-
+		//Copy input data to device
 		queue.enqueueWriteBuffer(inputBuffer, CL_TRUE, 0, inputSize, &input[0]);
+		queue.enqueueFillBuffer(outputBuffer, 0, 0, outputSize);
 		
-		cl::Kernel kernelIdentity = cl::Kernel(program, "identity");
-		kernelIdentity.setArg(0, inputBuffer);
-		kernelIdentity.setArg(1, outputBuffer);
+		//Set up mean kernel
+		kernelMean.setArg(0, inputBuffer);
+		kernelMean.setArg(1, outputBuffer);
+		kernelMean.setArg(2, cl::Local(localSize * sizeof(int)));
 
-		cl::Event profiler;
+		//Call kernels
+		queue.enqueueNDRangeKernel(kernelMean, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
 
-		cl::Device device = context.getInfo<CL_CONTEXT_DEVICES>()[deviceID];
-		size_t prefWorkSize = kernelIdentity.getWorkGroupInfo<CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE>(device);
-
-		queue.enqueueNDRangeKernel(kernelIdentity, cl::NullRange, cl::NDRange(inputElems), cl::NullRange);
-
+		//Copy result from device.
 		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &output[0]);
 
 		//Part 6 - Output Results
-
-		for (temp t : output) {
-			std::cout << t.location << "\t" << t.date << "\t" << t.value << std::endl;
+		for (int t : output) {
+			std::cout << t << std::endl;
 		}
 
-		std::cout << std::endl;
-
-		std::cout << "Total Number of Records:\t" << input.size() << std::endl;
-		std::cout << "Min:\t" << min << "\tMax:\t" << max << std::endl;
-		std::cout << "Mean:\t" << mean << std::endl;
-		std::cout << "Standard Deviation:\t" << stdDev << std::endl;
-		std::cout << "Median:\t" << med[1] << "\t(25th: " << med[0] << "\t75th: " << med[2] << ")" << std::endl;
+		std::cout << std::endl<< "Total Number of Records: " << input.size() << std::endl;
+		std::cout << std::endl << "Min: " << min << "\t\tMax: " << max << std::endl;
+		std::cout << "Average: " << output[0] / inputElems << std::endl;
+		std::cout << "Standard Deviation: " << stdDev << std::endl;
+		std::cout << "Median: " << med[1] << "\t(25th: " << med[0] << "\t75th: " << med[2] << ")" << std::endl;
 	}
 	catch (cl::Error err) {
 		std::cerr << "ERROR: " << err.what() << ", " << getErrorString(err.err()) << std::endl;
