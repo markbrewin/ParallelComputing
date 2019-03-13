@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
 	int sourceID = 0;
 
 	cl_float min = 999.0;
-	cl_float max = 0.0;
+	cl_float max = -999.0;
 	cl_float mean = 0.0;
 	cl_float stdDev = 0.0;
 	cl_float med[3] = { 0.0, 0.0, 0.0 };
@@ -108,6 +108,7 @@ int main(int argc, char **argv) {
 		cl::Device device = context.getInfo<CL_CONTEXT_DEVICES>()[deviceID];
 
 		cl::Kernel kernelMin = cl::Kernel(program, "minimum");
+		cl::Kernel kernelMax = cl::Kernel(program, "maximum");
 		cl::Kernel kernelSum = cl::Kernel(program, "sum");
 
 		size_t localSize = kernelSum.getWorkGroupInfo<CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE>(device);
@@ -125,6 +126,7 @@ int main(int argc, char **argv) {
 		size_t numGroups = inputElems / localSize;
 
 		std::vector<cl_float> outputMin(numGroups);
+		std::vector<cl_float> outputMax(numGroups);
 		std::vector<cl_float> outputSum(numGroups);
 
 		size_t outputSize = outputSum.size() * sizeof(cl_float);
@@ -140,6 +142,10 @@ int main(int argc, char **argv) {
 		kernelMin.setArg(0, inputBuffer);
 		kernelMin.setArg(1, outputBuffer);
 		kernelMin.setArg(2, cl::Local(localSize * sizeof(cl_float)));
+		
+		kernelMax.setArg(0, inputBuffer);
+		kernelMax.setArg(1, outputBuffer);
+		kernelMax.setArg(2, cl::Local(localSize * sizeof(cl_float)));
 
 		kernelSum.setArg(0, inputBuffer);
 		kernelSum.setArg(1, outputBuffer);
@@ -148,6 +154,9 @@ int main(int argc, char **argv) {
 		//Call kernels
 		queue.enqueueNDRangeKernel(kernelMin, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
 		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &outputMin[0]);
+		
+		queue.enqueueNDRangeKernel(kernelMax, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
+		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &outputMax[0]);
 
 		queue.enqueueNDRangeKernel(kernelSum, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
 		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &outputSum[0]);
@@ -158,6 +167,10 @@ int main(int argc, char **argv) {
 
 			if (min > outputMin[i]) {
 				min = outputMin[i];
+			}
+			
+			if (max < outputMax[i]) {
+				max = outputMax[i];
 			}
 		}
 
