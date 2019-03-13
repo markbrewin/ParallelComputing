@@ -30,7 +30,7 @@ int main(int argc, char **argv) {
 	int deviceID = 0;
 	int sourceID = 0;
 
-	cl_float min = 0.0;
+	cl_float min = 999.0;
 	cl_float max = 0.0;
 	cl_float mean = 0.0;
 	cl_float stdDev = 0.0;
@@ -106,11 +106,13 @@ int main(int argc, char **argv) {
 
 		//Part 4 - Memory Allocation
 		cl::Device device = context.getInfo<CL_CONTEXT_DEVICES>()[deviceID];
-		cl::Kernel kernelMean = cl::Kernel(program, "sum");
 
-		int localSize = 1024;
-		int numRecords = input.size();
-		int paddingSize = input.size() % localSize;
+		cl::Kernel kernelMin = cl::Kernel(program, "minimum");
+		cl::Kernel kernelSum = cl::Kernel(program, "sum");
+
+		size_t localSize = kernelSum.getWorkGroupInfo<CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE>(device);
+		size_t numRecords = input.size();
+		size_t paddingSize = input.size() % localSize;
 
 		if (paddingSize) {
 			std::vector<cl_float> inputExtra(localSize - paddingSize, 0);
@@ -122,8 +124,10 @@ int main(int argc, char **argv) {
 		size_t inputSize = input.size() * sizeof(cl_float);
 		size_t numGroups = inputElems / localSize;
 
-		std::vector<cl_float> output(numGroups);
-		size_t outputSize = output.size() * sizeof(cl_float);
+		std::vector<cl_float> outputMin(numGroups);
+		std::vector<cl_float> outputSum(numGroups);
+
+		size_t outputSize = outputSum.size() * sizeof(cl_float);
 
 		cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY, inputSize);
 		cl::Buffer outputBuffer(context, CL_MEM_READ_WRITE, outputSize);
@@ -132,32 +136,39 @@ int main(int argc, char **argv) {
 		//Copy input data to device
 		queue.enqueueWriteBuffer(inputBuffer, CL_TRUE, 0, inputSize, &input[0]);
 		queue.enqueueFillBuffer(outputBuffer, 0, 0, outputSize);
-		
-		//Set up mean kernel
-		kernelMean.setArg(0, inputBuffer);
-		kernelMean.setArg(1, outputBuffer);
-		kernelMean.setArg(2, cl::Local(localSize * sizeof(cl_float)));
+
+		kernelMin.setArg(0, inputBuffer);
+		kernelMin.setArg(1, outputBuffer);
+		kernelMin.setArg(2, cl::Local(localSize * sizeof(cl_float)));
+
+		kernelSum.setArg(0, inputBuffer);
+		kernelSum.setArg(1, outputBuffer);
+		kernelSum.setArg(2, cl::Local(localSize * sizeof(cl_float)));
 
 		//Call kernels
-		queue.enqueueNDRangeKernel(kernelMean, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
+		queue.enqueueNDRangeKernel(kernelMin, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
+		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &outputMin[0]);
 
-		//Copy result from device.
-		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &output[0]);
+		queue.enqueueNDRangeKernel(kernelSum, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
+		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &outputSum[0]);
 
 		//Part 6 - Output Results
-		for (cl_float t : output) {
-			//std::cout << t << std::endl;
+		for (size_t i = 0; i < numGroups; i++) {
+			mean += outputSum[i];
 
-			mean += t;
+			if (min > outputMin[i]) {
+				min = outputMin[i];
+			}
 		}
 
 		mean /= numRecords;
 
+		cout.precision(3);
 		std::cout << std::endl<< "Total Number of Records: " << numRecords << std::endl;
-		std::cout << std::endl << "Min: " << min << "\t\tMax: " << max << std::endl;
-		std::cout << "Average: " << mean << std::endl;
+		std::cout << std::endl << "Average: " << mean << std::endl;
+		std::cout << "Min: " << min << "\t\tMax: " << max << std::endl;
 		std::cout << "Standard Deviation: " << stdDev << std::endl;
-		std::cout << "Median: " << med[1] << "\t(25th: " << med[0] << "\t75th: " << med[2] << ")" << std::endl;
+		std::cout << "Median: " << med[1] << "\t\t(25th: " << med[0] << "\t75th: " << med[2] << ")" << std::endl;
 	}
 	catch (cl::Error err) {
 		std::cerr << "ERROR: " << err.what() << ", " << getErrorString(err.err()) << std::endl;
