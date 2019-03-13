@@ -176,8 +176,9 @@ int main(int argc, char **argv) {
 
 		mean /= numRecords;
 
-		cout.precision(3);
-		std::cout << std::endl<< "Total Number of Records: " << numRecords << std::endl;
+		cout.precision(2);
+		std::cout << std::fixed;
+		std::cout << std::endl << "Total Number of Records: " << numRecords << std::endl;
 		std::cout << std::endl << "Average: " << mean << std::endl;
 		std::cout << "Min: " << min << "\t\tMax: " << max << std::endl;
 		std::cout << "Standard Deviation: " << stdDev << std::endl;
