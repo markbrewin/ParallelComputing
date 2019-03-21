@@ -1,6 +1,7 @@
 #define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 #define __CL_ENABLE_EXCEPTIONS
 
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -22,6 +23,11 @@ void print_help() {
 	std::cerr << "  -d : select device" << std::endl;
 	std::cerr << "  -l : list all platforms and devices" << std::endl;
 	std::cerr << "  -h : print this message" << std::endl;
+}
+
+cl_float compare(const void * a, const void * b)
+{
+	return (*(cl_float*)a - *(cl_float*)b);
 }
 
 int main(int argc, char **argv) {
@@ -109,22 +115,35 @@ int main(int argc, char **argv) {
 
 		cl::Kernel kernelMin = cl::Kernel(program, "minimum");
 		cl::Kernel kernelMax = cl::Kernel(program, "maximum");
+		cl::Kernel kernelMed = cl::Kernel(program, "median");
 		cl::Kernel kernelSum = cl::Kernel(program, "sum");
 
 		size_t localSize = kernelSum.getWorkGroupInfo<CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE>(device);
 		size_t numRecords = input.size();
 		size_t paddingSize = input.size() % localSize;
+		cl_bool paddingBool = true;
 
 		if (paddingSize) {
-			std::vector<cl_float> inputExtra(localSize - paddingSize, 0);
+			std::vector<cl_float> inputExtra((localSize - paddingSize) / 2, 999);
+			std::vector<cl_float> inputExtra2((localSize - paddingSize) / 2, -999);
 
 			input.insert(input.end(), inputExtra.begin(), inputExtra.end());
+			input.insert(input.end(), inputExtra2.begin(), inputExtra2.end());
+
+			if ((paddingSize / 2) % 2 == 0) {
+				paddingBool = false;
+			}
+			else {
+				paddingBool = true;
+			}
 		}
 
 		size_t inputElems = input.size();
 		size_t inputSize = input.size() * sizeof(cl_float);
+		size_t boolSize = sizeof(cl_bool);
 		size_t numGroups = inputElems / localSize;
 
+		std::vector<cl_float> outputMed(numGroups);
 		std::vector<cl_float> outputMin(numGroups);
 		std::vector<cl_float> outputMax(numGroups);
 		std::vector<cl_float> outputSum(numGroups);
@@ -132,12 +151,19 @@ int main(int argc, char **argv) {
 		size_t outputSize = outputSum.size() * sizeof(cl_float);
 
 		cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY, inputSize);
+		cl::Buffer boolBuffer(context, CL_MEM_READ_ONLY, boolSize);
 		cl::Buffer outputBuffer(context, CL_MEM_READ_WRITE, outputSize);
 
 		//Part 5 - Device Operations
 		//Copy input data to device
 		queue.enqueueWriteBuffer(inputBuffer, CL_TRUE, 0, inputSize, &input[0]);
+		queue.enqueueWriteBuffer(boolBuffer, CL_TRUE, 0, boolSize, &paddingBool);
 		queue.enqueueFillBuffer(outputBuffer, 0, 0, outputSize);
+
+		kernelMed.setArg(0, inputBuffer);
+		kernelMed.setArg(1, outputBuffer);
+		kernelMed.setArg(2, boolBuffer);
+		kernelMed.setArg(3, cl::Local(localSize * sizeof(cl_float)));
 
 		kernelMin.setArg(0, inputBuffer);
 		kernelMin.setArg(1, outputBuffer);
@@ -152,6 +178,9 @@ int main(int argc, char **argv) {
 		kernelSum.setArg(2, cl::Local(localSize * sizeof(cl_float)));
 
 		//Call kernels
+		queue.enqueueNDRangeKernel(kernelMed, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
+		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &outputMed[0]);
+
 		queue.enqueueNDRangeKernel(kernelMin, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
 		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &outputMin[0]);
 		
@@ -175,6 +204,12 @@ int main(int argc, char **argv) {
 		}
 
 		mean /= numRecords;
+
+		std::sort(outputMed.begin(), outputMed.end());
+
+		med[0] = (outputMed[(numGroups / 4) - 1] + outputMed[numGroups / 4]) / 2;
+		med[1] = (outputMed[(numGroups / 2) - 1] + outputMed[(numGroups / 2)]) / 2;
+		med[2] = (outputMed[((numGroups / 4) * 3) - 1] + outputMed[(numGroups / 4) * 3]) / 2;
 
 		cout.precision(2);
 		std::cout << std::fixed;
