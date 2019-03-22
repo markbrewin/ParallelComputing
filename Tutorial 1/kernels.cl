@@ -1,9 +1,3 @@
-//kernel void difFromMean(global const float* input, global float* output, global const float* mean) {
-//	int gID = get_global_id(0);
-//
-//	output[gID] = input[gID] - mean;
-//}
-
 //kernel void identity(global const int* input, global int* output) {
 //	int gID = get_global_id(0);
 //	
@@ -104,13 +98,11 @@ kernel void median(global const float* input, global float* output, global const
 	}
 }
 
-kernel void stddev(global const float* input, global float* output) {
+kernel void variance(global const float* input, global float* output, global const float* mean) {
 	int gID = get_global_id(0);
-	int groupID = get_group_id(0);
-	int lID = get_local_id(0);
-	int size = get_local_size(0);
 
-
+	output[gID] = input[gID] - mean[0];
+	output[gID] = output[gID] * output[gID];
 }
 
 kernel void sum(global const float* input, global float* output, local float* sums) {
