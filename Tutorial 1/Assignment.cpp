@@ -26,10 +26,12 @@ void print_help() {
 }
 
 int main(int argc, char **argv) {
+	cl_float padVal = 999;
+
 	//Part 1 - handle command line options such as device selection, verbosity, etc.
 	int platformID = 0;
 	int deviceID = 0;
-	int sourceID = 1;
+	int sourceID = 0;
 
 	cl_float min = 999.0;
 	cl_float max = -999.0;
@@ -114,50 +116,33 @@ int main(int argc, char **argv) {
 		size_t localSize = kernel.getWorkGroupInfo<CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE>(device) * 8;
 		size_t numRecords = input.size();
 		size_t paddingSize = input.size() % localSize;
-		cl_bool padBool = true;
 
 		if (paddingSize) {
-			std::vector<cl_float> inputExtra((localSize - paddingSize) / 2, 99);
-			std::vector<cl_float> inputExtra2((localSize - paddingSize) / 2, -99);
+			std::vector<cl_float> inputExtra((localSize - paddingSize) / 2, padVal);
+			std::vector<cl_float> inputExtra2((localSize - paddingSize) / 2, -padVal);
 
 			input.insert(input.end(), inputExtra.begin(), inputExtra.end());
 			input.insert(input.begin(), inputExtra2.begin(), inputExtra2.end());
-
-			if ((paddingSize / 2) % 2 == 0) {
-				padBool = false;
-			}
-			else {
-				padBool = true;
-			}
 		}
 
 		size_t inputElems = input.size();
 		size_t inputSize = input.size() * sizeof(cl_float);
-		size_t boolSize = sizeof(cl_bool);
 		size_t floatSize = sizeof(cl_float);
 		size_t numGroups = inputElems / localSize;
 
 		std::vector<cl_float> output(numGroups);
-		std::vector<cl_float> outputQ1(inputElems);
-		std::vector<cl_float> outputQ2(inputElems);
 		std::vector<cl_float> outputVar(inputElems);
 
 		size_t outputSize = output.size() * sizeof(cl_float);
-		size_t outputQSize = outputQ1.size() * sizeof(cl_float);
 		size_t outputVarSize = outputVar.size() * sizeof(cl_float);
 
 		cl::Buffer inputBuffer(context, CL_MEM_READ_ONLY, inputSize);
-		cl::Buffer boolBuffer(context, CL_MEM_READ_ONLY, boolSize);
 		cl::Buffer floatBuffer(context, CL_MEM_READ_ONLY, floatSize);
 		cl::Buffer outputBuffer(context, CL_MEM_READ_WRITE, outputSize);
-		cl::Buffer outputQ1Buffer(context, CL_MEM_READ_WRITE, outputQSize);
-		cl::Buffer outputQ2Buffer(context, CL_MEM_READ_WRITE, outputQSize);
 		cl::Buffer outputVarBuffer(context, CL_MEM_READ_WRITE, outputVarSize);
 
 		queue.enqueueWriteBuffer(inputBuffer, CL_TRUE, 0, inputSize, &input[0]);
 		queue.enqueueFillBuffer(outputBuffer, 0, 0, outputSize);
-		queue.enqueueFillBuffer(outputQ1Buffer, 0, 0, outputQSize);
-		queue.enqueueFillBuffer(outputQ2Buffer, 0, 0, outputQSize);
 		queue.enqueueFillBuffer(outputVarBuffer, 0, 0, outputVarSize);
 
 		//Part 5 - Perform Device Operations and Calculations
@@ -174,62 +159,52 @@ int main(int argc, char **argv) {
 		}
 		mean /= numRecords;
 
-		//Min
-		kernel = cl::Kernel(program, "minimum");
-		kernel.setArg(0, inputBuffer);
-		kernel.setArg(1, outputBuffer);
-		kernel.setArg(2, cl::Local(localSize * sizeof(cl_float)));
+		////Min
+		//kernel = cl::Kernel(program, "minimum");
+		//kernel.setArg(0, inputBuffer);
+		//kernel.setArg(1, outputBuffer);
+		//kernel.setArg(2, cl::Local(localSize * sizeof(cl_float)));
 
-		queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
-		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &output[0]);
+		//queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
+		//queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &output[0]);
 
-		for (size_t i = 0; i < numGroups; i++) {
-			if (min > output[i]) {
-				min = output[i];
-			}
-		}
+		//for (size_t i = 0; i < numGroups; i++) {
+		//	if (min > output[i]) {
+		//		min = output[i];
+		//	}
+		//}
 
-		//Max
-		kernel = cl::Kernel(program, "maximum");
-		kernel.setArg(0, inputBuffer);
-		kernel.setArg(1, outputBuffer);
-		kernel.setArg(2, cl::Local(localSize * sizeof(cl_float)));
+		////Max
+		//kernel = cl::Kernel(program, "maximum");
+		//kernel.setArg(0, inputBuffer);
+		//kernel.setArg(1, outputBuffer);
+		//kernel.setArg(2, cl::Local(localSize * sizeof(cl_float)));
 
-		queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
-		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &output[0]);
+		//queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
+		//queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &output[0]);
 
-		for (size_t i = 0; i < numGroups; i++) {
-			if (max < output[i]) {
-				max = output[i];
-			}
-		}
+		//for (size_t i = 0; i < numGroups; i++) {
+		//	if (max < output[i]) {
+		//		max = output[i];
+		//	}
+		//}
 
-		//Median
-		queue.enqueueWriteBuffer(boolBuffer, CL_TRUE, 0, boolSize, &padBool);
+		//Median (& Quartiless), Min & Max
 		kernel = cl::Kernel(program, "median");
 		kernel.setArg(0, inputBuffer);
 		kernel.setArg(1, outputVarBuffer);
-		kernel.setArg(2, boolBuffer);
-		kernel.setArg(3, cl::Local(localSize * sizeof(cl_float)));
+		kernel.setArg(2, cl::Local(localSize * sizeof(cl_float)));
 
 		queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
 		queue.enqueueReadBuffer(outputVarBuffer, CL_TRUE, 0, outputVarSize, &outputVar[0]);
 
-		//cout << outputVar;
 		std::vector<cl_float> sorted;
 
-		//Merge Sort
-		//for (size_t i = 0; i < localSize; i++) {
 		std::vector<cl_float> pos(numGroups, 0);
 
-			/*for (size_t j = 0; j < temps.size(); j++) {
-				temps[j] = outputVar[(j * localSize) + i];
-			}*/
-		//}
-
 		while (sorted.size() <= inputElems) {
-			cl_float low = 999;
-			size_t lowIndex = 999;
+			cl_float low = padVal;
+			size_t lowIndex = padVal;
 
 			for (size_t i = 0; i < pos.size(); i++) {
 				if (pos[i] < localSize) {
@@ -243,25 +218,24 @@ int main(int argc, char **argv) {
 			sorted.push_back(low);
 			pos[lowIndex]++;
 		}
-				/*cl_float low = temps[0];
-				size_t lowIndex = 0;
 
-				for (size_t j = 0; j < temps.size(); j++) {
-					if (temps[j] <= low) {
-						low = temps[j];
-						lowIndex = j;
-					}
-				}
-
-				sorted.push_back(low);
-				temps.erase(temps.begin() + lowIndex);
-			}
-		}*/
-
-
-		//std::cout << sorted;
-
+		med[0] = (sorted[(inputElems / 4) - 1] + sorted[(inputElems / 4)]) / 2;
 		med[1] = (sorted[(inputElems / 2) - 1] + sorted[(inputElems / 2)]) / 2;
+		med[2] = (sorted[((inputElems / 4) * 3) - 1] + sorted[(inputElems / 4) * 3]) / 2;
+
+		for (size_t i = 0; i < sorted.size(); i++) {
+			if (sorted[i] != -padVal) {
+				min = sorted[i];
+				break;
+			}
+		}
+
+		for (size_t i = sorted.size() - 1; i >= 0; i--) {
+			if (sorted[i] != padVal) {
+				max = sorted[i];
+				break;
+			}
+		}
 
 		//Standard Deviation
 		queue.enqueueWriteBuffer(floatBuffer, CL_TRUE, 0, floatSize, &mean);
@@ -289,66 +263,6 @@ int main(int argc, char **argv) {
 		}
 		stdDev /= numRecords;
 		stdDev = sqrt(stdDev);
-		
-		//Quartiles
-		queue.enqueueWriteBuffer(inputBuffer, CL_TRUE, 0, inputSize, &input[0]);
-		queue.enqueueWriteBuffer(floatBuffer, CL_TRUE, 0, floatSize, &med[1]);
-
-		kernel = cl::Kernel(program, "quartile");
-		kernel.setArg(0, inputBuffer);
-		kernel.setArg(1, outputQ1Buffer);
-		kernel.setArg(2, outputQ2Buffer);
-		kernel.setArg(3, floatBuffer);
-
-		queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
-		queue.enqueueReadBuffer(outputQ1Buffer, CL_TRUE, 0, outputQSize, &outputQ1[0]);
-		queue.enqueueReadBuffer(outputQ2Buffer, CL_TRUE, 0, outputQSize, &outputQ2[0]);
-		
-		queue.enqueueWriteBuffer(inputBuffer, CL_TRUE, 0, inputSize, &outputQ1[0]);
-
-		kernel = cl::Kernel(program, "median");
-		kernel.setArg(0, inputBuffer);
-		kernel.setArg(1, outputBuffer);
-		kernel.setArg(2, boolBuffer);
-		kernel.setArg(3, cl::Local(localSize * sizeof(cl_float)));
-
-		queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
-		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &output[0]);
-
-		cl_float off = 0;
-		for (int i = 0; i < numGroups; i++) {
-			if (output[i] == 0) {
-				off++;
-			}
-		}
-		cl_float r = off / numGroups;
-		off *= r;
-
-		std::sort(output.begin(), output.end());
-		//std::cout << output[(numGroups - off)];
-		//std::cout << output;
-		med[0] = output[((numGroups / 4) * 3) + off];
-
-		queue.enqueueWriteBuffer(inputBuffer, CL_TRUE, 0, inputSize, &outputQ2[0]);
-
-		kernel = cl::Kernel(program, "median");
-		kernel.setArg(0, inputBuffer);
-		kernel.setArg(1, outputBuffer);
-		kernel.setArg(2, boolBuffer);
-		kernel.setArg(3, cl::Local(localSize * sizeof(cl_float)));
-
-		queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
-		queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &output[0]);
-
-		off = 0;
-		for (int i = 0; i < numGroups; i++) {
-			if (output[i] == 0) {
-				off++;
-			}
-		}
-
-		std::sort(output.begin(), output.end());
-		med[2] = (output[(numGroups / 2) - 1 + off] + output[(numGroups / 2) + off]) / 2;
 
 		//Part 7 - Output Results
 		cout.precision(2);
