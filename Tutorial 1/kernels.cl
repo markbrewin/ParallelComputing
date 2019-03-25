@@ -53,8 +53,13 @@ kernel void median(global const float* input, global float* output, local float*
 kernel void variance(global const float* input, global float* output, global const float* mean) {
 	int gID = get_global_id(0);
 
-	output[gID] = input[gID] - mean[0];
-	output[gID] = output[gID] * output[gID];
+	if (input[gID] != 999 && input[gID] != -999) {
+		output[gID] = input[gID] - mean[0];
+		output[gID] *= output[gID];
+	}
+	else {
+		output[gID] = 0;
+	}
 }
 
 kernel void sum(global const float* input, global float* output, local float* sums) {

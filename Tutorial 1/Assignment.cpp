@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
 	//Part 1 - handle command line options such as device selection, verbosity, etc.
 	int platformID = 0;
 	int deviceID = 0;
-	int sourceID = 0;
+	int sourceID = 1;
 
 	cl_float min = 999.0;
 	cl_float max = -999.0;
@@ -159,37 +159,7 @@ int main(int argc, char **argv) {
 		}
 		mean /= numRecords;
 
-		////Min
-		//kernel = cl::Kernel(program, "minimum");
-		//kernel.setArg(0, inputBuffer);
-		//kernel.setArg(1, outputBuffer);
-		//kernel.setArg(2, cl::Local(localSize * sizeof(cl_float)));
-
-		//queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
-		//queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &output[0]);
-
-		//for (size_t i = 0; i < numGroups; i++) {
-		//	if (min > output[i]) {
-		//		min = output[i];
-		//	}
-		//}
-
-		////Max
-		//kernel = cl::Kernel(program, "maximum");
-		//kernel.setArg(0, inputBuffer);
-		//kernel.setArg(1, outputBuffer);
-		//kernel.setArg(2, cl::Local(localSize * sizeof(cl_float)));
-
-		//queue.enqueueNDRangeKernel(kernel, cl::NullRange, cl::NDRange(inputElems), cl::NDRange(localSize));
-		//queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, outputSize, &output[0]);
-
-		//for (size_t i = 0; i < numGroups; i++) {
-		//	if (max < output[i]) {
-		//		max = output[i];
-		//	}
-		//}
-
-		//Median (& Quartiless), Min & Max
+		//Median & Quartiles
 		kernel = cl::Kernel(program, "median");
 		kernel.setArg(0, inputBuffer);
 		kernel.setArg(1, outputVarBuffer);
@@ -223,6 +193,7 @@ int main(int argc, char **argv) {
 		med[1] = (sorted[(inputElems / 2) - 1] + sorted[(inputElems / 2)]) / 2;
 		med[2] = (sorted[((inputElems / 4) * 3) - 1] + sorted[(inputElems / 4) * 3]) / 2;
 
+		//Min & Max
 		for (size_t i = 0; i < sorted.size(); i++) {
 			if (sorted[i] != -padVal) {
 				min = sorted[i];
