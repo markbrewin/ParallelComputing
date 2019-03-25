@@ -32,7 +32,7 @@ kernel void minimum(global const float* input, global float* output, local float
 
 	for (int i = 1; i < size; i *= 2) {
 		if (!(lID % (i * 2)) && ((lID + i) < size)) {
-			if (mins[lID] > mins[lID + i] && mins[lID + i] != -999) {
+			if (mins[lID] > mins[lID + i]) {
 				mins[lID] = mins[lID + i];
 			}
 		}
@@ -55,7 +55,7 @@ kernel void maximum(global const float* input, global float* output, local float
 
 	for (int i = 1; i < size; i *= 2) {
 		if (!(lID % (i * 2)) && ((lID + i) < size)) {
-			if (maxs[lID] < maxs[lID + i] && maxs[lID + i] != 999) {
+			if (maxs[lID] < maxs[lID + i]) {
 				maxs[lID] = maxs[lID + i];
 			}
 		}
@@ -71,6 +71,7 @@ kernel void median(global const float* input, global float* output, global const
 	int groupID = get_group_id(0);
 	int lID = get_local_id(0);
 	int size = get_local_size(0);
+	int offset = groupID * size;
 
 	sorted[lID] = input[gID];
 
@@ -86,15 +87,40 @@ kernel void median(global const float* input, global float* output, global const
 		if (lID % 2 == 1 && lID + 1 < size) {
 			cmpxchg(&sorted[lID], &sorted[lID + 1]);
 		}
+
+		barrier(CLK_LOCAL_MEM_FENCE);
 	}
 
 	barrier(CLK_LOCAL_MEM_FENCE);
 
-	if (l[0] == true) {
+	output[offset + lID] = sorted[lID];
+
+	/*if (l[0] == true) {
 		output[groupID] = (sorted[(size / 2) - 1] + sorted[(size / 2)]) / 2;
 	}
 	else {
 		output[groupID] = (sorted[(size / 2) + 1] + sorted[(size / 2)]) / 2;
+	}*/
+}
+
+kernel void quartile(global const float* input, global float* q1, global float* q2, global const float* med) {
+	int gID = get_global_id(0);
+
+	if (input[gID] < med[0]) {
+		q1[gID] = input[gID];
+		q2[gID] = 0;
+	}
+	else if (input[gID] > med[0]) {
+		q1[gID] = 0;
+		q2[gID] = input[gID];
+	}
+	else if (input[gID] == med[0]) {
+		q1[gID] = input[gID];
+		q2[gID] = input[gID];
+	}
+	else {
+		q1[gID] = 0;
+		q2[gID] = 0;
 	}
 }
 
